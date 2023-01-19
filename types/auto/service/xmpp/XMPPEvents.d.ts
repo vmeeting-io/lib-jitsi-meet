@@ -254,5 +254,6 @@ export declare enum XMPPEvents {
     PIN_RANDOM_PARTICIPANT = "xmpp.pin_random_participant",
     RANDOM_SELECTION_COUNTDOWN = "xmpp.random_selection_countdown",
     PARTICIPANT_BIRTHDAY_FLAG_UPDATED = "xmpp.birthday_flag_updated",
-    FACE_DETECT_ENABLED = "xmpp.face_detect_enabled"
+    FACE_DETECT_ENABLED = "xmpp.face_detect_enabled",
+    STT_ENABLED = "xmpp.stt_enabled"
 }

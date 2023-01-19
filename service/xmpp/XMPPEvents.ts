@@ -421,4 +421,6 @@ export enum XMPPEvents {
 
     // Designates an event indicating that face detect has enabled.
     FACE_DETECT_ENABLED = 'xmpp.face_detect_enabled',
+
+    STT_ENABLED = 'xmpp.stt_enabled',
 };
