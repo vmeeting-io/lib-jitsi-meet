@@ -152,6 +152,9 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function() {
     this.chatRoomForwarder.forward(XMPPEvents.FACE_DETECT_ENABLED,
         JitsiConferenceEvents.FACE_DETECT_ENABLED);
 
+    this.chatRoomForwarder.forward(XMPPEvents.STT_ENABLED,
+        JitsiConferenceEvents.STT_ENABLED);
+
     this.chatRoomForwarder.forward(XMPPEvents.NOTIFY_RANDOM_SELECTION_STARTED,
         JitsiConferenceEvents.NOTIFY_RANDOM_SELECTION_STARTED);
 

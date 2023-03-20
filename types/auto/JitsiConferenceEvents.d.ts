@@ -409,7 +409,9 @@ export declare enum JitsiConferenceEvents {
     /**
      * Event fired when face detect was enabled.
      */
-    FACE_DETECT_ENABLED = "conference.face_detect.enabled"
+    FACE_DETECT_ENABLED = "conference.face_detect.enabled",
+
+    STT_ENABLED = "conference.stt.enabled"
 }
 export declare const AUDIO_INPUT_STATE_CHANGE = JitsiConferenceEvents.AUDIO_INPUT_STATE_CHANGE;
 export declare const AUDIO_UNMUTE_PERMISSIONS_CHANGED = JitsiConferenceEvents.AUDIO_UNMUTE_PERMISSIONS_CHANGED;
@@ -495,3 +497,4 @@ export declare const NOTIFY_BIRTHDAY_HAT_ON = JitsiConferenceEvents.NOTIFY_BIRTH
 export declare const NOTICE_MESSAGE = JitsiConferenceEvents.NOTICE_MESSAGE;
 export declare const BREAKOUT_ROOMS_ATTENTION_UPDATED = JitsiConferenceEvents.BREAKOUT_ROOMS_ATTENTION_UPDATED;
 export declare const FACE_DETECT_ENABLED = JitsiConferenceEvents.FACE_DETECT_ENABLED;
+export declare const STT_ENABLED = JitsiConferenceEvents.STT_ENABLED;

@@ -151,6 +151,8 @@ export default class ChatRoom extends Listenable {
 
         this.locked = false;
         this.transcriptionStatus = JitsiTranscriptionStatus.OFF;
+
+        this.sttEnabled = false;
     }
 
     /* eslint-enable max-params */
@@ -355,6 +357,16 @@ export default class ChatRoom extends Listenable {
                 this.eventEmitter.emit(XMPPEvents.FACE_DETECT_ENABLED, value);
             } else {
                 logger.warn('No face detect enabled from backend');
+            }
+
+            const sttEnabled
+                = $(result).find('>query>x[type="result"]>field[var="muc#roominfo_sttenabled"]>value');      
+            
+            if (sttEnabled.length) {
+                const value = Boolean(parseInt(sttEnabled.text()));
+                this.eventEmitter.emit(XMPPEvents.STT_ENABLED, value);
+            } else {
+                logger.warn('No stt enabled from backend');
             }
 
             const membersOnly = $(result).find('>query>feature[var="muc_membersonly"]').length === 1;
@@ -1248,6 +1260,16 @@ export default class ChatRoom extends Listenable {
             try {
                 console.log('faceDetectEnabled received:', faceDetectEnabled);
                 this.eventEmitter.emit(XMPPEvents.FACE_DETECT_ENABLED, JSON.parse(faceDetectEnabled));
+            } catch(err) {
+                console.error(err);
+            }
+        }
+
+        const sttEnabled = $(msg).find('>sttenabled').text();
+        if (sttEnabled) {
+            try {
+                console.log('sttEnabled received:', sttEnabled);
+                this.eventEmitter.emit(XMPPEvents.STT_ENABLED, JSON.parse(sttEnabled));
             } catch(err) {
                 console.error(err);
             }
