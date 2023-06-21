@@ -337,8 +337,10 @@ export default class Lobby {
 
                 // send our email, as we do not handle this on initial presence we need a second one
                 if (email && !isModerator) {
-                    this.lobbyRoom.addOrReplaceInPresence(EMAIL_COMMAND, { value: email })
-                        && this.lobbyRoom.sendPresence();
+                    this.lobbyRoom.addOrReplaceInPresence(EMAIL_COMMAND, {
+                        attributes: { xmlns: `http://vmeeting.io/protocol/email` },
+                        value: email
+                    }) && this.lobbyRoom.sendPresence();
                 }
             });
             this.lobbyRoom.addEventListener(XMPPEvents.ROOM_JOIN_ERROR, reject);
