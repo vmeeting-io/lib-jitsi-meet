@@ -662,7 +662,7 @@ export default class XMPP extends Listenable {
         logger.info(`JID ${this.connection.jid} using MUC nickname ${mucNickname}`);
         roomjid += mucNickname;
 
-        return this.connection.emuc.createRoom(roomjid, null, options);
+        return this.connection.emuc.createRoom(roomjid, options?.password, options);
     }
 
     /**
