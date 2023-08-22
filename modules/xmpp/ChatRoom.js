@@ -685,7 +685,7 @@ export default class ChatRoom extends Listenable {
             hasVersionUpdate = member.version !== undefined;
             if (member.isFocus) {
                 this._initFocus(from, member.features);
-            } else {
+            } else if (member.nick) {
                 // identity is being added to member joined, so external
                 // services can be notified for that (currently identity is
                 // not used inside library)
