@@ -1,7 +1,8 @@
 /* global __dirname */
 
+const path = require('path');
 const process = require('process');
-const { ProvidePlugin } = require('webpack');
+const { IgnorePlugin, ProvidePlugin } = require('webpack');
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
 
 
@@ -10,6 +11,9 @@ module.exports = (minimize, analyzeBundle) => {
         // The inline-source-map is used to allow debugging the unit tests with Karma
         devtool: minimize ? 'source-map' : 'inline-source-map',
         resolve: {
+            alias: {
+                'jquery': require.resolve('jquery/dist/jquery.slim.min.js')
+            },
             extensions: [ '', '.js', '.ts' ]
         },
         mode: minimize ? 'production' : 'development',
@@ -24,13 +28,10 @@ module.exports = (minimize, analyzeBundle) => {
                         process.env.LIB_JITSI_MEET_COMMIT_HASH || 'development',
                     search: '{#COMMIT_HASH#}'
                 },
-                test: `${__dirname}/JitsiMeetJS.js`
+                test: path.join(__dirname, 'JitsiMeetJS.ts')
             }, {
                 // Transpile ES2015 (aka ES6) to ES5.
 
-                exclude: [
-                    new RegExp(`${__dirname}/node_modules/(?!@jitsi/js-utils)`)
-                ],
                 loader: 'babel-loader',
                 options: {
                     presets: [
@@ -74,10 +75,11 @@ module.exports = (minimize, analyzeBundle) => {
         },
         performance: {
             hints: minimize ? 'error' : false,
-            maxAssetSize: 750 * 1024,
-            maxEntrypointSize: 750 * 1024
+            maxAssetSize: 1.08 * 1024 * 1024,
+            maxEntrypointSize: 1.08 * 1024 * 1024
         },
         plugins: [
+            new IgnorePlugin({ resourceRegExp: /^(@xmldom\/xmldom|ws)$/ }),
             analyzeBundle
                 && new BundleAnalyzerPlugin({
                     analyzerMode: 'disabled',
@@ -85,7 +87,7 @@ module.exports = (minimize, analyzeBundle) => {
                 }),
             !minimize
                 && new ProvidePlugin({
-                    process: 'process/browser'
+                    process: require.resolve('process/browser')
                 })
         ].filter(Boolean)
     };

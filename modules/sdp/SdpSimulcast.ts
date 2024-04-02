@@ -1,17 +1,12 @@
-import MediaDirection from '../../service/RTC/MediaDirection';
+import { MediaDirection } from '../../service/RTC/MediaDirection';
 import { MediaType } from '../../service/RTC/MediaType';
+import { SIM_LAYERS } from '../../service/RTC/StandardVideoSettings';
 
 import * as transform from 'sdp-transform';
-
-const DEFAULT_NUM_OF_LAYERS = 3;
 
 interface Description {
     type: RTCSdpType;
     sdp: string;
-}
-
-interface Options {
-    numOfLayers?: number
 }
 
 /**
@@ -22,7 +17,7 @@ interface Options {
  * to a given endpoint.
  */
 export default class SdpSimulcast {
-    private _options: Options;
+    private _numOfLayers: number;
     private _ssrcCache: Map<string, Array<number>>;
 
     /**
@@ -30,13 +25,9 @@ export default class SdpSimulcast {
      *
      * @param options
      */
-    constructor(options: Options) {
-        this._options = options;
+    constructor() {
         this._ssrcCache = new Map();
-
-        if (!this._options.numOfLayers) {
-            this._options.numOfLayers = DEFAULT_NUM_OF_LAYERS;
-        }
+        this._numOfLayers = SIM_LAYERS.length;
     }
 
     /**
@@ -120,7 +111,7 @@ export default class SdpSimulcast {
         // Generate SIM layers.
         const simSsrcs = [];
 
-        for (let i = 0; i < this._options.numOfLayers - 1; ++i) {
+        for (let i = 0; i < this._numOfLayers - 1; ++i) {
             const simSsrc = this._generateSsrc();
 
             addAssociatedAttributes(mLine, simSsrc);
@@ -237,79 +228,6 @@ export default class SdpSimulcast {
         }
 
         return new RTCSessionDescription({
-            type: description.type,
-            sdp: transform.write(session)
-        });
-    }
-
-    /**
-     * Munges the given media description by removing the SSRCs and related FID groups for the higher layer streams.
-     *
-     * @param description
-     * @returns
-     */
-    mungeRemoteDescription(description: Description) : Description {
-        if (!description || !description.sdp) {
-            return description;
-        }
-
-        const session = transform.parse(description.sdp);
-
-        for (const media of session.media) {
-            if (media.type !== MediaType.VIDEO) {
-                continue;
-            }
-
-            if (media.direction !== MediaDirection.SENDONLY) {
-                continue;
-            }
-
-            // Ignore m-lines that do not have any SSRCs or SSRC groups. These are the ones associated with remote
-            // sources that have left the call. These will be recycled when a new remote source joins the call.
-            if (!media.ssrcGroups?.length || !media?.ssrcs.length) {
-                continue;
-            }
-
-            // Cache the SSRCs and the source groups.
-            const mungedSsrcs = new Set(media.ssrcs.slice());
-            const mungedSsrcGroups = new Set(media.ssrcGroups.slice());
-            const fidGroups = media.ssrcGroups.filter(group => group.semantics === 'FID');
-            const simGroup = media.ssrcGroups.find(group => group.semantics === 'SIM');
-            const primarySsrc = simGroup?.ssrcs.split(' ')[0];;
-
-            // When simulcast and RTX are both enabled.
-            if (fidGroups.length && simGroup) {
-                const fidGroup = fidGroups.find(group => group.ssrcs.includes(primarySsrc));
-                const secondarySsrc = fidGroup.ssrcs.split(' ')[1];
-
-                for (const ssrcGroup of media.ssrcGroups) {
-                    if (ssrcGroup !== fidGroup) {
-                        mungedSsrcGroups.delete(ssrcGroup);
-                    }
-                }
-                for (const ssrc of media.ssrcs) {
-                    if (ssrc.id.toString() !== primarySsrc
-                        && ssrc.id.toString() !== secondarySsrc) {
-                        mungedSsrcs.delete(ssrc);
-                    }
-                }
-
-            // When simulcast is enabled but RTX is disabled.
-            } else if (simGroup) {
-                mungedSsrcGroups.delete(simGroup);
-
-                for (const ssrc of media.ssrcs) {
-                    if (ssrc.id.toString() !== primarySsrc) {
-                        mungedSsrcs.delete(ssrc);
-                    }
-                }
-            }
-
-            media.ssrcs = Array.from(mungedSsrcs);
-            media.ssrcGroups = Array.from(mungedSsrcGroups);
-        }
-
-        return new RTCSessionDescription ({
             type: description.type,
             sdp: transform.write(session)
         });

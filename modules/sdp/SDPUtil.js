@@ -1,8 +1,8 @@
 import { getLogger } from '@jitsi/logger';
 const logger = getLogger(__filename);
 
-import CodecMimeType from '../../service/RTC/CodecMimeType';
-import MediaDirection from '../../service/RTC/MediaDirection';
+import { CodecMimeType } from '../../service/RTC/CodecMimeType';
+import { MediaDirection } from '../../service/RTC/MediaDirection';
 import browser from '../browser';
 import RandomUtil from '../util/RandomUtil';
 
@@ -294,6 +294,20 @@ const SDPUtil = {
 
         // Everything past the "name:" part
         return sourceNameLine?.substring(sourceNameLine.indexOf(' name:') + 6);
+    },
+
+    /**
+     * Parse the "videoType" attribute encoded in a set of SSRC attributes (e.g.
+     * "a=ssrc:1234 videoType:desktop")
+     *
+     * @param {string[]} ssrcLines
+     * @returns {string | undefined}
+     */
+    parseVideoTypeLine(ssrcLines) {
+        const s = ' videoType:';
+        const videoTypeLine = ssrcLines.find(ssrcSdpLine => ssrcSdpLine.indexOf(s) > 0);
+
+        return videoTypeLine?.substring(videoTypeLine.indexOf(s) + s.length);
     },
     parseRTCPFB(line) {
         const parts = line.substr(10).split(' ');
@@ -603,10 +617,11 @@ const SDPUtil = {
      * Sets the given codecName as the preferred codec by moving it to the beginning
      * of the payload types list (modifies the given mline in place). All instances
      * of the codec are moved up.
-     * @param {object} mLine the mline object from an sdp as parsed by transform.parse
-     * @param {string} codecName the name of the preferred codec
+     * @param {object} mLine the mline object from an sdp as parsed by transform.parse.
+     * @param {string} codecName the name of the preferred codec.
+     * @param {boolean} sortPayloadTypes whether the payloadtypes need to be sorted for a given codec.
      */
-    preferCodec(mline, codecName) {
+    preferCodec(mline, codecName, sortPayloadTypes = false) {
         if (!mline || !codecName) {
             return;
         }
@@ -616,6 +631,28 @@ const SDPUtil = {
             .map(rtp => rtp.payload);
 
         if (matchingPayloadTypes) {
+            if (sortPayloadTypes && codecName === CodecMimeType.H264) {
+                // Move all the H.264 codecs with packetization-mode=0 to top of the list.
+                const payloadsWithMode0 = matchingPayloadTypes.filter(payload => {
+                    const fmtp = mline.fmtp.find(item => item.payload === payload);
+
+                    if (fmtp) {
+                        return fmtp.config.includes('packetization-mode=0');
+                    }
+
+                    return false;
+                });
+
+                for (const pt of payloadsWithMode0.reverse()) {
+                    const idx = matchingPayloadTypes.findIndex(payloadType => payloadType === pt);
+
+                    if (idx >= 0) {
+                        matchingPayloadTypes.splice(idx, 1);
+                        matchingPayloadTypes.unshift(pt);
+                    }
+                }
+            }
+
             // Call toString() on payloads to get around an issue within SDPTransform that sets
             // payloads as a number, instead of a string, when there is only one payload.
             const payloadTypes
@@ -631,6 +668,8 @@ const SDPUtil = {
                 payloadTypes.unshift(pt);
             }
             mline.payloads = payloadTypes.join(' ');
+        } else {
+            logger.error(`No matching RTP payload type found for ${codecName}, failed to set preferred codecs`);
         }
     },
 
@@ -641,33 +680,40 @@ const SDPUtil = {
      *
      * @param {object} mLine the mline object from an sdp as parsed by transform.parse.
      * @param {string} codecName the name of the codec which will be stripped.
-     * @param {boolean} highProfile determines if only the high profile H264 codec needs to be
-     * stripped from the sdp when the passed codecName is H264.
+     * @param {boolean} highProfile determines if only the high profile codec needs to be stripped from the sdp for a
+     * given codec type.
      */
     stripCodec(mLine, codecName, highProfile = false) {
         if (!mLine || !codecName) {
             return;
         }
 
-        const h264Pts = [];
+        const highProfileCodecs = new Map();
         let removePts = [];
-        const stripH264HighCodec = codecName.toLowerCase() === CodecMimeType.H264 && highProfile;
 
         for (const rtp of mLine.rtp) {
-            if (rtp.codec
-                && rtp.codec.toLowerCase() === codecName.toLowerCase()) {
-                if (stripH264HighCodec) {
-                    h264Pts.push(rtp.payload);
+            if (rtp.codec && rtp.codec.toLowerCase() === codecName.toLowerCase()) {
+                if (highProfile) {
+                    highProfileCodecs.set(rtp.payload, rtp.codec);
                 } else {
                     removePts.push(rtp.payload);
                 }
             }
         }
 
-        // high profile H264 codecs have 64 as the first two bytes of the profile-level-id.
-        if (stripH264HighCodec) {
+        if (highProfile) {
             removePts = mLine.fmtp
-                .filter(item => h264Pts.indexOf(item.payload) > -1 && item.config.includes('profile-level-id=64'))
+                .filter(item => {
+                    const codec = highProfileCodecs.get(item.payload);
+
+                    if (codec) {
+                        return codec.toLowerCase() === CodecMimeType.VP9
+                            ? !item.config.includes('profile-id=0')
+                            : !item.config.includes('profile-level-id=42');
+                    }
+
+                    return false;
+                })
                 .map(item => item.payload);
         }
 

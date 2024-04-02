@@ -1,6 +1,5 @@
-import { getLogger } from '@jitsi/logger';
 
-const logger = getLogger('FeatureFlags');
+import browser from '../browser';
 
 /**
  * A global module for accessing information about different feature flags state.
@@ -9,32 +8,42 @@ class FeatureFlags {
     /**
      * Configures the module.
      *
-     * @param {boolean} flags.sourceNameSignaling - Enables source names in the signaling.
+     * @param {object} flags - The feature flags.
+     * @param {boolean=} flags.runInLiteMode - Enables lite mode for testing to disable media decoding.
+     * @param {boolean=} flags.ssrcRewritingEnabled - Use SSRC rewriting.
+     * @param {boolean=} flags.enableJoinAsVisitor - Enable joining as a visitor.
      */
     init(flags) {
-        this._sourceNameSignaling = Boolean(flags.sourceNameSignaling);
-        this._sendMultipleVideoStreams = Boolean(flags.sendMultipleVideoStreams);
-
-        logger.info(`Source name signaling: ${this._sourceNameSignaling},`
-            + ` Send multiple video streams: ${this._sendMultipleVideoStreams}`);
+        this._runInLiteMode = Boolean(flags.runInLiteMode);
+        this._ssrcRewriting = Boolean(flags.ssrcRewritingEnabled);
+        this._joinAsVisitor = Boolean(flags.enableJoinAsVisitor ?? true);
     }
 
     /**
-     * Checks if multiple local video streams support is enabled.
+     * Checks if the run in lite mode is enabled.
+     * This will cause any media to be received and not decoded. (Insertable streams are used to discard
+     * all media before it is decoded). This can be used for various test scenarios.
      *
      * @returns {boolean}
      */
-    isMultiStreamSupportEnabled() {
-        return this._sourceNameSignaling && this._sendMultipleVideoStreams;
+    isRunInLiteModeEnabled() {
+        return this._runInLiteMode && browser.supportsInsertableStreams();
     }
 
     /**
-     * Checks if the source name signaling is enabled.
-     *
+     * Checks if the clients supports re-writing of the SSRCs on the media streams by the bridge.
      * @returns {boolean}
      */
-    isSourceNameSignalingEnabled() {
-        return this._sourceNameSignaling;
+    isSsrcRewritingSupported() {
+        return this._ssrcRewriting;
+    }
+
+    /**
+     * Checks if the clients supports joining as a visitor.
+     * @returns {boolean}
+     */
+    isJoinAsVisitorSupported() {
+        return this._joinAsVisitor;
     }
 }
 

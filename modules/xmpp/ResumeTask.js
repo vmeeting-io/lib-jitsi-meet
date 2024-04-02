@@ -1,8 +1,8 @@
 import { getLogger } from '@jitsi/logger';
 
 import {
-    default as NetworkInfo,
-    NETWORK_INFO_EVENT
+    NETWORK_INFO_EVENT,
+    default as NetworkInfo
 } from '../connectivity/NetworkInfo';
 import { getJitterDelay } from '../util/Retry';
 
@@ -51,7 +51,7 @@ export default class ResumeTask {
         this._resumeRetryN += 1;
 
         this._networkOnlineListener
-            = NetworkInfo.addEventListener(
+            = NetworkInfo.addCancellableListener(
                 NETWORK_INFO_EVENT,
                 ({ isOnline }) => {
                     if (isOnline) {

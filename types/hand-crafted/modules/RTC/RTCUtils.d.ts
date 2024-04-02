@@ -14,8 +14,8 @@ declare class RTCUtils extends Listenable {
   getAudioOutputDevice: () => string;
   getCurrentlyAvailableMediaDevices: () => unknown[]; // TODO:
   getEventDataForActiveDevice: ( device: MediaDeviceInfo ) => unknown; // TODO:
-  setSuspendVideo: ( constraints: unknown, enable: boolean ) => void; // TODO:
   arePermissionsGrantedForAvailableDevices: () => boolean;
+  isUserStreamById: ( streamId: string ) => boolean;
 }
 
 declare const rtcUtils: RTCUtils;

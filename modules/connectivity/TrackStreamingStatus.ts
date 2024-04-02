@@ -4,12 +4,11 @@ import { JitsiConferenceEvents } from '../../JitsiConferenceEvents';
 import * as JitsiTrackEvents from '../../JitsiTrackEvents';
 import RTCEvents from '../../service/RTC/RTCEvents';
 import { createTrackStreamingStatusEvent } from '../../service/statistics/AnalyticsEvents';
-import JitsiConference from '../../types/hand-crafted/JitsiConference';
-import JitsiRemoteTrack from '../../types/hand-crafted/modules/RTC/JitsiRemoteTrack';
-import RTC from '../../types/hand-crafted/modules/RTC/RTC';
-import { VideoType } from '../../types/hand-crafted/service/RTC/VideoType';
 import browser from '../browser';
 import Statistics from '../statistics/statistics';
+import JitsiRemoteTrack from '../RTC/JitsiRemoteTrack';
+import { VideoType } from '../../service/RTC/VideoType';
+import RTC from '../RTC/RTC';
 
 /** Track streaming statuses. */
 export enum TrackStreamingStatus {
@@ -38,8 +37,7 @@ export enum TrackStreamingStatus {
   }
 
 type StreamingStatusMap = {
-    // TODO: Replace this hand crafted VideoType when we convert VideoType.js to Typescript.
-    videoType?: VideoType, 
+    videoType?: VideoType,
     startedMs?: number,
     p2p?: boolean,
     streamingStatus?: string,
@@ -75,7 +73,7 @@ const DEFAULT_RESTORING_TIMEOUT = 10000;
  */
 export class TrackStreamingStatusImpl {
     rtc: RTC;
-    conference: JitsiConference;
+    conference: any; // TODO: needs JitsiConference type
     track: JitsiRemoteTrack;
 
     /**  This holds the timeout callback ID scheduled using window.setTimeout. */
@@ -207,7 +205,7 @@ export class TrackStreamingStatusImpl {
      *
      * @constructor
      * @param rtc - the RTC service instance
-     * @param conference - parent conference instance
+     * @param conference - parent conference instance // TODO: Needs JitsiConference Type
      * @param {Object} options
      * @param {number} [options.p2pRtcMuteTimeout=2500] custom value for
      * {@link TrackStreamingStatusImpl.p2pRtcMuteTimeout}.
@@ -216,7 +214,7 @@ export class TrackStreamingStatusImpl {
      * @param {number} [options.outOfForwardedSourcesTimeout=500] custom value for
      * {@link TrackStreamingStatusImpl.outOfForwardedSourcesTimeout}.
      */
-    constructor(rtc: RTC, conference: JitsiConference, track: JitsiRemoteTrack, options: {
+    constructor(rtc: RTC, conference: any, track: JitsiRemoteTrack, options: {
         outOfForwardedSourcesTimeout: number,
         p2pRtcMuteTimeout: number,
         rtcMuteTimeout: number
@@ -302,6 +300,7 @@ export class TrackStreamingStatusImpl {
             this.rtc.removeListener(RTCEvents.REMOTE_TRACK_UNMUTE, this._onTrackRtcUnmuted);
 
             this.track.off(JitsiTrackEvents.TRACK_MUTE_CHANGED, this._onSignallingMuteChanged);
+            this.track.off(JitsiTrackEvents.TRACK_VIDEOTYPE_CHANGED, this._onTrackVideoTypeChanged);
         }
 
         this.conference.off(JitsiConferenceEvents.FORWARDED_SOURCES_CHANGED, this._onForwardedSourcesChanged);
@@ -328,15 +327,8 @@ export class TrackStreamingStatusImpl {
 
             logger.debug(`Emit track streaming status(${Date.now()}) ${sourceName}: ${newStatus}`);
 
-            // Log the event on CallStats
-            Statistics.sendLog(
-                JSON.stringify({
-                    id: 'track.streaming.status',
-                    track: sourceName,
-                    status: newStatus
-                }));
-
-            this.track.emit(JitsiTrackEvents.TRACK_STREAMING_STATUS_CHANGED, newStatus);
+            // It's common for the event listeners to access the JitsiRemoteTrack. Thus pass it as a parameter here.
+            this.track.emit(JitsiTrackEvents.TRACK_STREAMING_STATUS_CHANGED, this.track, newStatus);
         }
     }
 
@@ -479,9 +471,6 @@ export class TrackStreamingStatusImpl {
 
         const sourceName = this.track.getSourceName();
 
-        logger.debug(`Fowarded sources changed leaving=${leavingForwardedSources}, entering=${
-            enteringForwardedSources} at ${timestamp}`);
-
         // If the browser doesn't fire the mute/onmute events when the remote peer stops/starts sending media,
         // calculate the streaming status for all the tracks since it won't get triggered automatically on the track
         // that has started/stopped receiving media.
@@ -582,7 +571,7 @@ export class TrackStreamingStatusImpl {
             const timeout = this._getVideoFrozenTimeout();
 
             this.trackTimer = window.setTimeout(() => {
-                logger.debug(`Set RTC mute timeout for: ${sourceName} of ${timeout} ms`);
+                logger.debug(`Set track RTC muted for: ${sourceName} after the timeout of ${timeout} ms`);
                 this.clearTimeout();
                 this.figureOutStreamingStatus();
             }, timeout);
@@ -621,8 +610,6 @@ export class TrackStreamingStatusImpl {
         }
 
         const sourceName = this.track.getSourceName();
-
-        logger.debug(`Detector on track signalling mute changed: ${sourceName}`, track.isMuted());
 
         this.figureOutStreamingStatus();
     }

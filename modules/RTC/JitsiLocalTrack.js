@@ -10,7 +10,7 @@ import {
     NO_DATA_FROM_SOURCE,
     TRACK_MUTE_CHANGED
 } from '../../JitsiTrackEvents';
-import CameraFacingMode from '../../service/RTC/CameraFacingMode';
+import { CameraFacingMode } from '../../service/RTC/CameraFacingMode';
 import { MediaType } from '../../service/RTC/MediaType';
 import RTCEvents from '../../service/RTC/RTCEvents';
 import { VideoType } from '../../service/RTC/VideoType';
@@ -37,23 +37,24 @@ export default class JitsiLocalTrack extends JitsiTrack {
      *
      * @constructor
      * @param {Object} trackInfo
+     * @param {Object} trackInfo.constraints - The contraints used for creating the track.
      * @param {number} trackInfo.rtcId - The ID assigned by the RTC module.
      * @param {Object} trackInfo.stream - The WebRTC MediaStream, parent of the track.
      * @param {Object} trackInfo.track - The underlying WebRTC MediaStreamTrack for new JitsiLocalTrack.
      * @param {string} trackInfo.mediaType - The MediaType of the JitsiLocalTrack.
      * @param {string} trackInfo.videoType - The VideoType of the JitsiLocalTrack.
      * @param {Array<Object>} trackInfo.effects - The effects to be applied to the JitsiLocalTrack.
-     * @param {number} trackInfo.resolution - The the video resolution if it's a video track
      * @param {string} trackInfo.deviceId - The ID of the local device for this track.
      * @param {string} trackInfo.facingMode - Thehe camera facing mode used in getUserMedia call (for mobile only).
-     * @param {sourceId} trackInfo.sourceId - The id of the desktop sharing source. NOTE: defined for desktop sharing
-     * tracks only.
+     * @param {string} trackInfo.sourceId - The id of the desktop sharing source, which is the Chrome media source ID,
+     * returned by Desktop Picker on Electron. NOTE: defined for desktop sharing tracks only.
+     * @param {string} trackInfo.sourceType - The type of source the track originates from.
      */
     constructor({
+        constraints,
         deviceId,
         facingMode,
         mediaType,
-        resolution,
         rtcId,
         sourceId,
         sourceType,
@@ -66,7 +67,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
             /* conference */ null,
             stream,
             track,
-            /* streamInactiveHandler */ () => this.emit(LOCAL_TRACK_STOPPED),
+            /* streamInactiveHandler */ () => this.emit(LOCAL_TRACK_STOPPED, this),
             mediaType,
             videoType);
 
@@ -97,23 +98,37 @@ export default class JitsiLocalTrack extends JitsiTrack {
          */
         this.rtcId = rtcId;
         this.sourceId = sourceId;
-        this.sourceType = sourceType;
-
-        // Get the resolution from the track itself because it cannot be
-        // certain which resolution webrtc has fallen back to using.
-        this.resolution = track.getSettings().height;
-        this.maxEnabledResolution = resolution;
+        this.sourceType = sourceType ?? displaySurface;
 
         // Cache the constraints of the track in case of any this track
         // model needs to call getUserMedia again, such as when unmuting.
         this._constraints = track.getConstraints();
 
-        // Safari returns an empty constraints object, construct the constraints using getSettings.
-        if (!Object.keys(this._constraints).length && videoType === VideoType.CAMERA) {
-            this._constraints = {
-                height: track.getSettings().height,
-                width: track.getSettings().width
-            };
+        if (mediaType === MediaType.VIDEO) {
+            if (videoType === VideoType.CAMERA) {
+                // Safari returns an empty constraints object, construct the constraints using getSettings.
+                if (!Object.keys(this._constraints).length) {
+                    this._constraints = {
+                        height: { ideal: this.getHeight() },
+                        width: { ideal: this.getWidth() }
+                    };
+                }
+
+                // If the constraints are still empty, fallback to the constraints used for initial gUM.
+                if (isNaN(this._constraints.height.ideal) && isNaN(this._constraints.width.ideal)) {
+                    this._constraints.height = { ideal: constraints.height.ideal };
+                    this._constraints.width = { ideal: constraints.width.ideal };
+                }
+            }
+
+            // Get the resolution from the track itself since we do not know what camera capability the browser has
+            // picked for the given constraints, fallback to the constraints if MediaStreamTrack.getSettings() doesn't
+            // return the height.
+            this.resolution = this.getHeight();
+            if (isNaN(this.resolution) && this._constraints.height?.ideal) {
+                this.resolution = this._constraints.height.ideal;
+            }
+            this.maxEnabledResolution = this.resolution;
         }
 
         this.deviceId = deviceId;
@@ -226,13 +241,13 @@ export default class JitsiLocalTrack extends JitsiTrack {
         // TPC and JingleSessionPC which would contain the queue and would notify the signaling layer when local SSRCs
         // are changed. This would help to separate XMPP from the RTC module.
         return new Promise((resolve, reject) => {
-            this.conference._addLocalTrackAsUnmute(this)
+            this.conference._addLocalTrackToPc(this)
                 .then(resolve, error => reject(new Error(error)));
         });
     }
 
     /**
-     * Fires NO_DATA_FROM_SOURCE event and logs it to analytics and callstats.
+     * Fires NO_DATA_FROM_SOURCE event and logs it to analytics
      *
      * @private
      * @returns {void}
@@ -242,12 +257,10 @@ export default class JitsiLocalTrack extends JitsiTrack {
 
         this.emit(NO_DATA_FROM_SOURCE, value);
 
+        logger.debug(`NO_DATA_FROM_SOURCE event with value ${value} detected for track: ${this}`);
+
         // FIXME: Should we report all of those events
         Statistics.sendAnalytics(createNoDataFromSourceEvent(this.getType(), value));
-        Statistics.sendLog(JSON.stringify({
-            name: NO_DATA_FROM_SOURCE,
-            log: value
-        }));
     }
 
     /**
@@ -328,7 +341,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
 
             return;
         }
-        this.conference._removeLocalTrackAsMute(this).then(
+        this.conference._removeLocalTrackFromPc(this).then(
             successCallback,
             error => errorCallback(new Error(error)));
     }
@@ -354,7 +367,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
      * @returns {Promise}
      */
     _setMuted(muted) {
-        if (this.isMuted() === muted) {
+        if (this.isMuted() === muted && this.videoType !== VideoType.DESKTOP) {
             return Promise.resolve();
         }
 
@@ -367,9 +380,16 @@ export default class JitsiLocalTrack extends JitsiTrack {
         // A function that will print info about muted status transition
         const logMuteInfo = () => logger.info(`Mute ${this}: ${muted}`);
 
-        if (this.isAudioTrack()
-                || this.videoType === VideoType.DESKTOP
-                || !browser.doesVideoMuteByStreamRemove()) {
+        // In React Native we mute the camera by setting track.enabled but that doesn't
+        // work for screen-share tracks, so do the remove-as-mute for those.
+        const doesVideoMuteByStreamRemove
+            = browser.isReactNative() ? this.videoType === VideoType.DESKTOP : browser.doesVideoMuteByStreamRemove();
+
+        // In the multi-stream mode, desktop tracks are muted from jitsi-meet instead of being removed from the
+        // conference. This is needed because we don't want the client to signal a source-remove to the remote peer for
+        // the desktop track when screenshare is stopped. Later when screenshare is started again, the same sender will
+        // be re-used without the need for signaling a new ssrc through source-add.
+        if (this.isAudioTrack() || !doesVideoMuteByStreamRemove) {
             logMuteInfo();
 
             // If we have a stream effect that implements its own mute functionality, prioritize it before
@@ -418,9 +438,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
                     { constraints: { video: this._constraints } }));
 
             promise = promise.then(streamsInfo => {
-                // The track kind for presenter track is video as well.
-                const mediaType = this.getType() === MediaType.PRESENTER ? MediaType.VIDEO : this.getType();
-                const streamInfo = streamsInfo.find(info => info.track.kind === mediaType);
+                const streamInfo = streamsInfo.find(info => info.track.kind === this.getType());
 
                 if (streamInfo) {
                     this._setStream(streamInfo.stream);
@@ -442,8 +460,9 @@ export default class JitsiLocalTrack extends JitsiTrack {
                     this._startStreamEffect(this._streamEffect);
                 }
 
-                this.containers.map(
-                    cont => RTCUtils.attachMediaStream(cont, this.stream));
+                this.containers.map(cont => RTCUtils.attachMediaStream(cont, this.stream).catch(() => {
+                    logger.error(`Attach media failed for ${this} on video unmute!`);
+                }));
 
                 return this._addStreamToConferenceAsUnmute();
             });
@@ -587,17 +606,16 @@ export default class JitsiLocalTrack extends JitsiTrack {
      * @extends JitsiTrack#dispose
      * @returns {Promise}
      */
-    dispose() {
-        let promise = Promise.resolve();
+    async dispose() {
 
         // Remove the effect instead of stopping it so that the original stream is restored
         // on both the local track and on the peerconnection.
         if (this._streamEffect) {
-            promise = this.setEffect();
+            await this.setEffect();
         }
 
         if (this.conference) {
-            promise = promise.then(() => this.conference.removeTrack(this));
+            await this.conference.removeTrack(this);
         }
 
         if (this.stream) {
@@ -612,7 +630,7 @@ export default class JitsiLocalTrack extends JitsiTrack {
                 this._onAudioOutputDeviceChanged);
         }
 
-        return promise.then(() => super.dispose());
+        return super.dispose();
     }
 
     /**
@@ -647,6 +665,19 @@ export default class JitsiLocalTrack extends JitsiTrack {
         }
 
         return undefined;
+    }
+
+    /**
+     * Returns the capture resolution of the video track.
+     *
+     * @returns {Number}
+     */
+    getCaptureResolution() {
+        if (this.videoType === VideoType.CAMERA || !browser.isWebKitBased()) {
+            return this.resolution;
+        }
+
+        return this.getHeight();
     }
 
     /**
@@ -806,14 +837,6 @@ export default class JitsiLocalTrack extends JitsiTrack {
      */
     setConference(conference) {
         this.conference = conference;
-
-        // We want to keep up with postponed events which should have been fired
-        // on "attach" call, but for local track we not always have the
-        // conference before attaching. However this may result in duplicated
-        // events if they have been triggered on "attach" already.
-        for (let i = 0; i < this.containers.length; i++) {
-            this._maybeFireTrackAttached(this.containers[i]);
-        }
     }
 
     /**
@@ -848,7 +871,11 @@ export default class JitsiLocalTrack extends JitsiTrack {
         if (!conference) {
             this._switchStreamEffect(effect);
             if (this.isVideoTrack()) {
-                this.containers.forEach(cont => RTCUtils.attachMediaStream(cont, this.stream));
+                this.containers.forEach(cont => {
+                    RTCUtils.attachMediaStream(cont, this.stream).catch(() => {
+                        logger.error(`Attach media failed for ${this} when trying to set effect.`);
+                    });
+                });
             }
 
             return Promise.resolve();
@@ -856,15 +883,18 @@ export default class JitsiLocalTrack extends JitsiTrack {
 
         this._setEffectInProgress = true;
 
-        // TODO: Create new JingleSessionPC method for replacing a stream in JitsiLocalTrack without offer answer.
-        return conference.removeTrack(this)
+        return conference._removeLocalTrackFromPc(this)
             .then(() => {
                 this._switchStreamEffect(effect);
                 if (this.isVideoTrack()) {
-                    this.containers.forEach(cont => RTCUtils.attachMediaStream(cont, this.stream));
+                    this.containers.forEach(cont => {
+                        RTCUtils.attachMediaStream(cont, this.stream).catch(() => {
+                            logger.error(`Attach media failed for ${this} when trying to set effect.`);
+                        });
+                    });
                 }
 
-                return conference.addTrack(this);
+                return conference._addLocalTrackToPc(this);
             })
             .then(() => {
                 this._setEffectInProgress = false;

@@ -23,7 +23,7 @@ export default class AudioOutputProblemDetector {
     /**
      * Creates new <tt>AudioOutputProblemDetector</tt> instance.
      *
-     * @param {JitsiCofnerence} conference - The conference instance to be monitored.
+     * @param {JitsiConference} conference - The conference instance to be monitored.
      */
     constructor(conference) {
         this._conference = conference;
@@ -43,7 +43,8 @@ export default class AudioOutputProblemDetector {
      * A listener for audio level data received by a remote participant.
      *
      * @param {string} userID - The user id of the participant that sent the data.
-     * @param {number} audioLevel - The average audio level value.
+     * @param {Object} result - The result object.
+     * @param {number} [result.avgAudioLevels] - The average audio level value.
      * @returns {void}
      */
     _onRemoteAudioLevelReceived(userID, { avgAudioLevels }) {

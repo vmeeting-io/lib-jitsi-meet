@@ -69,6 +69,11 @@ export enum XMPPEvents {
     DISPLAY_NAME_CHANGED = 'xmpp.display_name_changed',
 
     /**
+     * Event for incoming presence error which is for required display name.
+     */
+    DISPLAY_NAME_REQUIRED = 'xmpp.display_name_required',
+
+    /**
      * Chat room instance have been added to Strophe.emuc plugin.
      */
     EMUC_ROOM_ADDED = 'xmpp.emuc_room_added',
@@ -168,6 +173,9 @@ export enum XMPPEvents {
     // Designates an event indicating that the MUC members only config has changed.
     MUC_MEMBERS_ONLY_CHANGED = 'xmpp.muc_members_only_changed',
 
+    // Designates an event indicating that the MUC visitors support has changed.
+    MUC_VISITORS_SUPPORTED_CHANGED = 'xmpp.muc_visitors_supported_changed',
+
     // Designates an event indicating that a participant in the XMPP MUC has
     // advertised that they have audio muted (or unmuted).
     PARTICIPANT_AUDIO_MUTED = 'xmpp.audio_muted',
@@ -217,6 +225,12 @@ export enum XMPPEvents {
     ROOM_CONNECT_NOT_ALLOWED_ERROR = 'xmpp.room_connect_error.not_allowed',
     ROOM_JOIN_ERROR = 'xmpp.room_join_error',
     ROOM_CONNECT_MEMBERS_ONLY_ERROR = 'xmpp.room_connect_error.members_only',
+
+    /**
+     * Indicates that we have received a reply to our disco-info request for the room.
+     */
+    ROOM_DISCO_INFO_UPDATED = 'xmpp.room_disco_info_updated',
+    ROOM_DISCO_INFO_FAILED = 'xmpp.room_disco_info_failed',
 
     /**
      * Indicates that max users limit has been reached.
@@ -337,6 +351,16 @@ export enum XMPPEvents {
      */
     BREAKOUT_ROOMS_ATTENTION_UPDATED = 'xmpp.breakout-rooms.attention_updated',
 
+    /**
+     * Event fired when we receive a message related to room metadata.
+     */
+    ROOM_METADATA_EVENT = 'xmpp.room-metadata.event',
+
+    /**
+     * Event fired when we receive a message related to room metadata.
+     */
+    ROOM_METADATA_UPDATED = 'xmpp.room-metadata.updated',
+
     // Designates an event indicating that we should join the conference with
     // audio and/or video muted.
     START_MUTED_FROM_FOCUS = 'xmpp.start_muted_from_focus',
@@ -365,7 +389,7 @@ export enum XMPPEvents {
     /**
      * Indicates that video SIP GW state changed.
      *
-     * @param {VideoSIPGWConstants} status - Any of the following statuses:
+     * @param {VideoSIPGWStatusConstants} status - Any of the following statuses:
      * STATUS_BUSY, STATUS_AVAILABLE or STATUS_UNDEFINED.
      */
     VIDEO_SIP_GW_AVAILABILITY_CHANGED = 'xmpp.videoSIPGWAvailabilityChanged',
@@ -374,11 +398,21 @@ export enum XMPPEvents {
      * Indicates that video SIP GW Session state changed.
      * The statuses are any of the following statuses:
      * STATE_ON, STATE_OFF, STATE_PENDING, STATE_RETRYING, STATE_FAILED.
-     * {@see VideoSIPGWConstants}
+     * {@see VideoSIPGWStateConstants}
      *
      * @param {options} event - {address, oldState, newState, displayName}.
      */
     VIDEO_SIP_GW_SESSION_STATE_CHANGED = 'xmpp.videoSIPGWSessionStateChanged',
+
+    /**
+     * Event indicating we have received a message from the visitors component.
+     */
+    VISITORS_MESSAGE = 'xmpp.visitors_message',
+
+    /**
+     * Event indicating that our request for promotion was rejected.
+     */
+    VISITORS_REJECTION = 'xmpp.visitors_rejection',
 
     // Designates an event indicating that the local ICE connection state has
     // changed.

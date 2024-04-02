@@ -1,10 +1,8 @@
 import { BrowserDetection } from '@jitsi/js-utils';
-import { getLogger } from '@jitsi/logger';
-
-const logger = getLogger(__filename);
 
 /* Minimum required Chrome / Chromium version. This applies also to derivatives. */
 const MIN_REQUIRED_CHROME_VERSION = 72;
+const MIN_REQUIRED_FIREFOX_VERSION = 91;
 const MIN_REQUIRED_SAFARI_VERSION = 14;
 const MIN_REQUIRED_IOS_VERSION = 14;
 
@@ -19,15 +17,6 @@ const MIN_REQUIRED_IOS_VERSION = 14;
  */
 export default class BrowserCapabilities extends BrowserDetection {
     /**
-     * Creates new BrowserCapabilities instance.
-     */
-    constructor() {
-        super();
-        logger.info(
-            `This appears to be ${this.getName()}, ver: ${this.getVersion()}`);
-    }
-
-    /**
      * Tells whether or not the <tt>MediaStream/tt> is removed from the <tt>PeerConnection</tt> and disposed on video
      * mute (in order to turn off the camera device). This is needed on Firefox because of the following bug
      * https://bugzilla.mozilla.org/show_bug.cgi?id=1735951
@@ -39,23 +28,12 @@ export default class BrowserCapabilities extends BrowserDetection {
     }
 
     /**
-     * Checks if the current browser is Chromium based, i.e., it's either Chrome / Chromium or uses it as its engine,
-     * but doesn't identify as Chrome.
+     * Checks if the client is running on an Android browser.
      *
-     * This includes the following browsers:
-     * - Chrome and Chromium.
-     * - Other browsers which use the Chrome engine, but are detected as Chrome, such as Brave and Vivaldi.
-     * - Browsers which are NOT Chrome but use it as their engine, and have custom detection code: Opera, Electron
-     *   and NW.JS.
-     * This excludes
-     * - Chrome on iOS since it uses WKWebView.
+     * @returns {boolean}
      */
-    isChromiumBased() {
-        return (this.isChrome()
-            || this.isElectron()
-            || this.isNWJS()
-            || this.isOpera())
-            && !this.isWebKitBased();
+    isAndroidBrowser() {
+        return !this.isReactNative() && this.getOS() === 'Android';
     }
 
     /**
@@ -64,28 +42,14 @@ export default class BrowserCapabilities extends BrowserDetection {
      * @returns {boolean}
      */
     isIosBrowser() {
-        const { userAgent, maxTouchPoints, platform } = navigator;
-
-        return Boolean(userAgent.match(/iP(ad|hone|od)/i))
-            || (maxTouchPoints && maxTouchPoints > 2 && /MacIntel/.test(platform));
+        return !this.isReactNative() && this.getOS() === 'iOS';
     }
 
     /**
-     * Checks if the current browser is WebKit based. It's either
-     * Safari or uses WebKit as its engine.
-     *
-     * This includes Chrome and Firefox on iOS
-     *
-     * @returns {boolean}
+     * Checks if the client is running on a mobile device.
      */
-    isWebKitBased() {
-        // https://trac.webkit.org/changeset/236144/webkit/trunk/LayoutTests/webrtc/video-addLegacyTransceiver.html
-        return this._bowser.isEngine('webkit')
-            && typeof navigator.mediaDevices !== 'undefined'
-            && typeof navigator.mediaDevices.getUserMedia !== 'undefined'
-            && typeof window.RTCRtpTransceiver !== 'undefined'
-            // eslint-disable-next-line no-undef
-            && Object.keys(RTCRtpTransceiver.prototype).indexOf('currentDirection') > -1;
+    isMobileDevice() {
+        return this.isAndroidBrowser() || this.isIosBrowser() || this.isReactNative();
     }
 
     /**
@@ -107,8 +71,8 @@ export default class BrowserCapabilities extends BrowserDetection {
             return false;
         }
 
-        return (this.isChromiumBased() && this._getChromiumBasedVersion() >= MIN_REQUIRED_CHROME_VERSION)
-            || this.isFirefox()
+        return (this.isChromiumBased() && this.isEngineVersionGreaterThan(MIN_REQUIRED_CHROME_VERSION - 1))
+            || (this.isFirefox() && this.isVersionGreaterThan(MIN_REQUIRED_FIREFOX_VERSION - 1))
             || this.isReactNative()
             || this.isWebKitBased();
     }
@@ -126,7 +90,8 @@ export default class BrowserCapabilities extends BrowserDetection {
      * @returns {boolean} true if the browser is supported for iOS devices
      */
     isSupportedIOSBrowser() {
-        return this._getIOSVersion() >= MIN_REQUIRED_IOS_VERSION;
+        return this._getSafariVersion() >= MIN_REQUIRED_IOS_VERSION
+                || this._getIOSVersion() >= MIN_REQUIRED_IOS_VERSION;
     }
 
     /**
@@ -176,6 +141,15 @@ export default class BrowserCapabilities extends BrowserDetection {
     }
 
     /**
+     * Returns true if the browser supports Dependency Descriptor header extension.
+     *
+     * @returns {boolean}
+     */
+    supportsDDExtHeaders() {
+        return !this.isFirefox();
+    }
+
+    /**
      * Checks if the current browser support the device change event.
      * @return {boolean}
      */
@@ -183,14 +157,6 @@ export default class BrowserCapabilities extends BrowserDetection {
         return navigator.mediaDevices
             && typeof navigator.mediaDevices.ondevicechange !== 'undefined'
             && typeof navigator.mediaDevices.addEventListener !== 'undefined';
-    }
-
-    /**
-     * Checks if the current browser supports RTT statistics for srflx local
-     * candidates through the legacy getStats() API.
-     */
-    supportsLocalCandidateRttStatistics() {
-        return this.isChromiumBased() || this.isReactNative() || this.isWebKitBased();
     }
 
     /**
@@ -208,11 +174,7 @@ export default class BrowserCapabilities extends BrowserDetection {
      */
     supportsReceiverStats() {
         return typeof window.RTCRtpReceiver !== 'undefined'
-            && Object.keys(RTCRtpReceiver.prototype).indexOf('getSynchronizationSources') > -1
-
-            // Disable this on Safari because it is reporting 0.000001 as the audio levels for all
-            // remote audio tracks.
-            && !this.isWebKitBased();
+            && Object.keys(RTCRtpReceiver.prototype).indexOf('getSynchronizationSources') > -1;
     }
 
     /**
@@ -233,6 +195,26 @@ export default class BrowserCapabilities extends BrowserDetection {
     }
 
     /**
+     * Returns true if the browser supports the new Scalability Mode API for VP9/AV1 simulcast and full SVC. H.264
+     * simulcast will also be supported by the jvb for this version because the bridge is able to read the Dependency
+     * Descriptor RTP header extension to extract layers information for H.264 as well.
+     *
+     * @returns {boolean}
+     */
+    supportsScalabilityModeAPI() {
+        return this.isChromiumBased() && this.isEngineVersionGreaterThan(112);
+    }
+
+    /**
+     * Returns true if the browser supports track based statistics for the local video track. Otherwise,
+     * track resolution and framerate will be calculated based on the 'outbound-rtp' statistics.
+     * @returns {boolean}
+     */
+    supportsTrackBasedStats() {
+        return this.isChromiumBased() && this.isEngineVersionLessThan(112);
+    }
+
+    /**
      * Returns true if VP9 is supported by the client on the browser. VP9 is currently disabled on Firefox and Safari
      * because of issues with rendering. Please check https://bugzilla.mozilla.org/show_bug.cgi?id=1492500,
      * https://bugs.webkit.org/show_bug.cgi?id=231071 and https://bugs.webkit.org/show_bug.cgi?id=231074 for details.
@@ -248,15 +230,6 @@ export default class BrowserCapabilities extends BrowserDetection {
      */
     usesSdpMungingForSimulcast() {
         return this.isChromiumBased() || this.isReactNative() || this.isWebKitBased();
-    }
-
-    /**
-     * Checks if the browser uses webrtc-adapter. All browsers except React Native do.
-     *
-     * @returns {boolean}
-     */
-    usesAdapter() {
-        return !this.isReactNative();
     }
 
     /**
@@ -327,15 +300,6 @@ export default class BrowserCapabilities extends BrowserDetection {
     }
 
     /**
-     * Checks if the browser supports unified plan.
-     *
-     * @returns {boolean}
-     */
-    supportsUnifiedPlan() {
-        return !this.isReactNative();
-    }
-
-    /**
      * Checks if the browser supports voice activity detection via the @type {VADAudioAnalyser} service.
      *
      * @returns {boolean}
@@ -353,37 +317,6 @@ export default class BrowserCapabilities extends BrowserDetection {
         // Disable RTX on Firefox up to 96 because we prefer simulcast over RTX
         // see https://bugzilla.mozilla.org/show_bug.cgi?id=1738504
         return !(this.isFirefox() && this.isVersionLessThan('96'));
-    }
-
-    /**
-     * Returns the version of a Chromium based browser.
-     *
-     * @returns {Number}
-     */
-    _getChromiumBasedVersion() {
-        if (this.isChromiumBased()) {
-            // NW.JS doesn't expose the Chrome version in the UA string.
-            if (this.isNWJS()) {
-                // eslint-disable-next-line no-undef
-                return Number.parseInt(process.versions.chromium, 10);
-            }
-
-            // Here we process all browsers which use the Chrome engine but
-            // don't necessarily identify as Chrome. We cannot use the version
-            // comparing functions because the Electron, Opera and NW.JS
-            // versions are inconsequential here, as we need to know the actual
-            // Chrome engine version.
-            const ua = navigator.userAgent;
-
-            if (ua.match(/Chrome/)) {
-                const version
-                    = Number.parseInt(ua.match(/Chrome\/([\d.]+)/)[1], 10);
-
-                return version;
-            }
-        }
-
-        return -1;
     }
 
     /**
@@ -406,7 +339,7 @@ export default class BrowserCapabilities extends BrowserDetection {
      */
     _getIOSVersion() {
         if (this.isWebKitBased()) {
-            return Number.parseInt(this.getVersion(), 10);
+            return Number.parseInt(this.getOSVersion(), 10);
         }
 
         return -1;

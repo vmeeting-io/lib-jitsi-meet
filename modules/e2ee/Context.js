@@ -189,12 +189,10 @@ export class Context {
                 encodedFrame,
                 keyIndex);
 
-            return controller.enqueue(decodedFrame);
+            if (decodedFrame) {
+                controller.enqueue(decodedFrame);
+            }
         }
-
-        // TODO: this just passes through to the decoder. Is that ok? If we don't know the key yet
-        // we might want to buffer a bit but it is still unclear how to do that (and for how long etc).
-        controller.enqueue(encodedFrame);
     }
 
     /**
@@ -204,7 +202,7 @@ export class Context {
      * @param {RTCEncodedVideoFrame|RTCEncodedAudioFrame} encodedFrame - Encoded video frame.
      * @param {number} keyIndex - the index of the decryption data in _cryptoKeyRing array.
      * @param {number} ratchetCount - the number of retries after ratcheting the key.
-     * @returns {RTCEncodedVideoFrame|RTCEncodedAudioFrame} - The decrypted frame.
+     * @returns {Promise<RTCEncodedVideoFrame|RTCEncodedAudioFrame>} - The decrypted frame.
      * @private
      */
     async _decryptFrame(
@@ -253,12 +251,16 @@ export class Context {
             newUint8.set(new Uint8Array(plainText), frameHeader.byteLength);
 
             encodedFrame.data = newData;
+
+            return encodedFrame;
         } catch (error) {
             if (this._sharedKey) {
-                return encodedFrame;
+                return;
             }
 
             if (ratchetCount < RATCHET_WINDOW_SIZE) {
+                const currentKey = this._cryptoKeyRing[this._currentKeyIndex];
+
                 material = await importKey(await ratchet(material));
 
                 const newKey = await deriveKeys(material);
@@ -268,7 +270,7 @@ export class Context {
                 return await this._decryptFrame(
                     encodedFrame,
                     keyIndex,
-                    initialKey || this._cryptoKeyRing[this._currentKeyIndex],
+                    initialKey || currentKey,
                     ratchetCount + 1);
             }
 
@@ -282,8 +284,6 @@ export class Context {
 
             // TODO: notify the application about error status.
         }
-
-        return encodedFrame;
     }
 
 

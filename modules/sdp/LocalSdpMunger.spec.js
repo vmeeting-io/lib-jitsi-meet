@@ -29,8 +29,8 @@ describe('TransformSdpsForUnifiedPlan', () => {
         FeatureFlags.init({ });
         localSdpMunger = new LocalSdpMunger(tpc, localEndpointId);
     });
-    describe('stripSsrcs', () => {
-        it('should strip ssrcs from an sdp with no msid', () => {
+    describe('StripSsrcs', () => {
+        it('should strip ssrcs from an sdp with no msid (i.e., recvonly transceivers)', () => {
             localSdpMunger.tpc.isP2P = false;
 
             const sdpStr = transform.write(SampleSdpStrings.recvOnlySdp);
@@ -47,7 +47,7 @@ describe('TransformSdpsForUnifiedPlan', () => {
             expect(videoSsrcs.length).toEqual(0);
         });
 
-        describe('should do nothing to an sdp with msid', () => {
+        describe('should strip cname, label and mslabel from an sdp with msid', () => {
             let audioSsrcs, videoSsrcs;
 
             const transformStreamIdentifiers = () => {
@@ -63,18 +63,11 @@ describe('TransformSdpsForUnifiedPlan', () => {
                 videoSsrcs = getSsrcLines(newSdp, 'video');
             };
 
-            it('without source name signaling enabled (no injected source name)', () => {
-                transformStreamIdentifiers();
-
-                expect(audioSsrcs.length).toEqual(4);
-                expect(videoSsrcs.length).toEqual(6);
-            });
             it('with source name signaling enabled (injected source name)', () => {
-                FeatureFlags.init({ sourceNameSignaling: true });
                 transformStreamIdentifiers();
 
-                expect(audioSsrcs.length).toEqual(4 + 1 /* injected source name */);
-                expect(videoSsrcs.length).toEqual(6 + 3 /* injected source name into each ssrc */);
+                expect(audioSsrcs.length).toEqual(1 + 1 /* injected source name */);
+                expect(videoSsrcs.length).toEqual(3 + 3 /* injected source name into each ssrc */);
             });
         });
     });
@@ -95,7 +88,7 @@ describe('TransformSdpsForUnifiedPlan', () => {
                 if (ssrcLine.attribute === 'msid') {
                     const msid = ssrcLine.value.split(' ')[0];
 
-                    expect(msid).toBe(`${localEndpointId}-video-${tpc.id}`);
+                    expect(msid).toBe(`${localEndpointId}-video-0-${tpc.id}`);
                 }
             }
         });
@@ -119,47 +112,32 @@ describe('TransformSdpsForUnifiedPlan', () => {
     });
 });
 
-describe('DoNotTransformSdpForPlanB', () => {
-    let localSdpMunger;
+describe('Transform msids for source-name signaling', () => {
     const tpc = new MockPeerConnection('1', false);
     const localEndpointId = 'sRdpsdg';
 
-    beforeEach(() => {
-        FeatureFlags.init({ });
-        localSdpMunger = new LocalSdpMunger(tpc, localEndpointId);
-    });
-    describe('stripSsrcs', () => {
-        describe('should not strip ssrcs from an sdp with no msid', () => {
-            let audioSsrcs, videoSsrcs;
-
-            const transformStreamIdentifiers = () => {
-                localSdpMunger.tpc.isP2P = false;
-
-                const sdpStr = transform.write(SampleSdpStrings.recvOnlySdp);
-                const desc = new RTCSessionDescription({
-                    type: 'offer',
-                    sdp: sdpStr
-                });
-                const transformedDesc = localSdpMunger.transformStreamIdentifiers(desc);
-                const newSdp = transform.parse(transformedDesc.sdp);
-
-                audioSsrcs = getSsrcLines(newSdp, 'audio');
-                videoSsrcs = getSsrcLines(newSdp, 'video');
-            };
-
-            it('without source name signaling', () => {
-                transformStreamIdentifiers();
-
-                expect(audioSsrcs.length).toEqual(1);
-                expect(videoSsrcs.length).toEqual(1);
-            });
-            it('with source name signaling', () => {
-                FeatureFlags.init({ sourceNameSignaling: true });
-                transformStreamIdentifiers();
-
-                expect(audioSsrcs.length).toEqual(1 + 1 /* injected source name */);
-                expect(videoSsrcs.length).toEqual(1 + 1 /* injected source name */);
-            });
+    const localSdpMunger = new LocalSdpMunger(tpc, localEndpointId);
+    let audioMsid, audioMsidLine, videoMsid, videoMsidLine;
+    const transformStreamIdentifiers = () => {
+        const sdpStr = transform.write(SampleSdpStrings.simulcastRtxSdp);
+        const desc = new RTCSessionDescription({
+            type: 'offer',
+            sdp: sdpStr
         });
+        const transformedDesc = localSdpMunger.transformStreamIdentifiers(desc);
+        const newSdp = transform.parse(transformedDesc.sdp);
+
+        audioMsidLine = getSsrcLines(newSdp, 'audio').find(ssrc => ssrc.attribute === 'msid')?.value;
+        audioMsid = audioMsidLine.split(' ')[0];
+        videoMsidLine = getSsrcLines(newSdp, 'video').find(ssrc => ssrc.attribute === 'msid')?.value;
+        videoMsid = videoMsidLine.split(' ')[0];
+    };
+
+    it('should transform', () => {
+        FeatureFlags.init({ });
+        transformStreamIdentifiers();
+
+        expect(audioMsid).toBe('sRdpsdg-audio-0-1');
+        expect(videoMsid).toBe('sRdpsdg-video-0-1');
     });
 });

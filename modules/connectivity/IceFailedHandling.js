@@ -69,18 +69,12 @@ export default class IceFailedHandling {
                 + `ICE state: ${jvbConnIceState}, `
                 + `use 'session-terminate': ${useTerminateForRestart}`);
             if (useTerminateForRestart) {
-                this._conference.jvbJingleSession.terminate(
-                    () => {
-                        logger.info('session-terminate for ice restart - done');
-                    },
-                    error => {
-                        logger.error(`session-terminate for ice restart - error: ${error.message}`);
-                    }, {
-                        reason: 'connectivity-error',
-                        reasonDescription: 'ICE FAILED',
-                        requestRestart: true,
-                        sendSessionTerminate: true
-                    });
+                this._conference._stopJvbSession({
+                    reason: 'connectivity-error',
+                    reasonDescription: 'ICE FAILED',
+                    requestRestart: true,
+                    sendSessionTerminate: true
+                });
             } else {
                 this._conference.jvbJingleSession.sendIceFailedNotification();
             }
