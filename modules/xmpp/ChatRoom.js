@@ -1488,6 +1488,13 @@ export default class ChatRoom extends Listenable {
     onPresenceError(pres, from) {
         let errorDescriptionNode;
 
+        if (from === this.myroomjid) {
+            // we have tried to join, and we received an error, let's send again conference-iq on next attempt
+            // as it may turn out that jicofo left the room if we were the first to try,
+            // and the user delayed the attempt for entering the password or such
+            this.xmpp.moderator.conferenceRequestSent = false;
+        }
+
         if ($(pres)
                 .find(
                     '>error[type="auth"]'
@@ -1529,8 +1536,8 @@ export default class ChatRoom extends Listenable {
                     if (this._roomCreationRetries <= 3) {
                         const retryDelay = getJitterDelay(
                             /* retry */ this._roomCreationRetries,
-                            /* minDelay */ 300,
-                            1);
+                            /* minDelay */ 500,
+                            1.5);
 
                         // let's retry inviting jicofo and joining the room, retries will take between 1 and 3 seconds
                         setTimeout(() => this.join(this.password, this.replaceParticipant), retryDelay);
@@ -1725,6 +1732,7 @@ export default class ChatRoom extends Listenable {
                 type: 'set' })
                 .c('query', {
                     xmlns: 'http://jabber.org/protocol/muc#admin' });
+            let sendIq = false;
 
             Object.values(this.members).forEach(m => {
                 if (m.jid && !MEMBERS_AFFILIATIONS.includes(m.affiliation)) {
@@ -1732,9 +1740,11 @@ export default class ChatRoom extends Listenable {
                         'affiliation': 'member',
                         'jid': Strophe.getBareJidFromJid(m.jid)
                     }).up();
+                    sendIq = true;
                 }
             });
-            this.xmpp.connection.sendIQ(affiliationsIq.up());
+
+            sendIq && this.xmpp.connection.sendIQ(affiliationsIq.up());
         }
 
         const errorCallback = onError ? onError : () => {}; // eslint-disable-line no-empty-function

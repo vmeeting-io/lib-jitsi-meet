@@ -384,8 +384,7 @@ JitsiConference.prototype._init = function(options = {}) {
                 ? config.videoQuality.mobileCodecPreferenceOrder
                 : config.videoQuality?.codecPreferenceOrder,
             disabledCodec: _getCodecMimeType(config.videoQuality?.disabledCodec),
-            preferredCodec: _getCodecMimeType(config.videoQuality?.preferredCodec),
-            supportsAv1: config.testing?.enableAv1Support
+            preferredCodec: _getCodecMimeType(config.videoQuality?.preferredCodec)
         },
         p2p: {
             preferenceOrder: browser.isMobileDevice() && config.p2p?.mobileCodecPreferenceOrder
@@ -475,7 +474,6 @@ JitsiConference.prototype._init = function(options = {}) {
             aliasName: this._statsCurrentId,
             userName: config.statisticsDisplayName ? config.statisticsDisplayName : this.myUserId(),
             confID: config.confID || `${this.connection.options.hosts.domain}/${this.options.name}`,
-            siteID: config.siteID,
             roomName: this.options.name,
             applicationName: config.applicationName
         });
@@ -1454,11 +1452,6 @@ JitsiConference.prototype._setupNewTrack = function(newTrack) {
     this.rtc.addLocalTrack(newTrack);
     newTrack.setConference(this);
 
-    // Suspend media on the inactive media session since it gets automatically enabled for a newly added source.
-    if (this.isP2PActive()) {
-        this._suspendMediaTransferForJvbConnection();
-    }
-
     // Add event handlers.
     newTrack.muteHandler = this._fireMuteChangeEvent.bind(this, newTrack);
     newTrack.addEventListener(JitsiTrackEvents.TRACK_MUTE_CHANGED, newTrack.muteHandler);
@@ -1984,12 +1977,12 @@ JitsiConference.prototype.onMemberLeft = function(jid, reason) {
     }
 
     tracksToBeRemoved.forEach(track => {
+        // Fire the event before renegotiation is done so that the thumbnails can be removed immediately.
+        this.eventEmitter.emit(JitsiConferenceEvents.TRACK_REMOVED, track);
+
         if (FeatureFlags.isSsrcRewritingSupported()) {
             track.setSourceName(null);
             track.setOwner(null);
-        } else {
-            // Fire the event before renegotiation is done so that the thumbnails can be removed immediately.
-            this.eventEmitter.emit(JitsiConferenceEvents.TRACK_REMOVED, track);
         }
     });
 
@@ -3048,9 +3041,7 @@ JitsiConference.prototype._addRemoteP2PTracks = function() {
  */
 JitsiConference.prototype._addRemoteTracks = function(logName, remoteTracks) {
     for (const track of remoteTracks) {
-        // There will be orphan (with no owner) tracks when ssrc-rewriting is enabled and all of them need to be addded
-        // back to the conference.
-        if (FeatureFlags.isSsrcRewritingSupported() || this.participants.has(track.ownerEndpointId)) {
+        if (this.participants.has(track.ownerEndpointId)) {
             logger.info(`Adding remote ${logName} track: ${track}`);
             this.onRemoteTrackAdded(track);
         }
