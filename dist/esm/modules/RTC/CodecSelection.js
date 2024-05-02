@@ -5,9 +5,9 @@ import { MediaType } from '../../service/RTC/MediaType';
 import browser from '../browser';
 const logger = getLogger(__filename);
 // Default video codec preferences on mobile and desktop endpoints.
-const DESKTOP_VIDEO_CODEC_ORDER = [CodecMimeType.VP9, CodecMimeType.VP8, CodecMimeType.H264];
-const MOBILE_P2P_VIDEO_CODEC_ORDER = [CodecMimeType.H264, CodecMimeType.VP8, CodecMimeType.VP9];
-const MOBILE_VIDEO_CODEC_ORDER = [CodecMimeType.VP8, CodecMimeType.VP9, CodecMimeType.H264];
+const DESKTOP_VIDEO_CODEC_ORDER = [CodecMimeType.VP9, CodecMimeType.VP8, CodecMimeType.H264, CodecMimeType.AV1];
+const MOBILE_P2P_VIDEO_CODEC_ORDER = [CodecMimeType.H264, CodecMimeType.VP8, CodecMimeType.VP9, CodecMimeType.AV1];
+const MOBILE_VIDEO_CODEC_ORDER = [CodecMimeType.VP8, CodecMimeType.VP9, CodecMimeType.H264, CodecMimeType.AV1];
 /**
  * This class handles the codec selection mechanism for the conference based on the config.js settings.
  * The preferred codec is selected based on the settings and the list of codecs supported by the browser.
@@ -88,9 +88,6 @@ export class CodecSelection {
         const videoCodecMimeTypes = browser.isMobileDevice() && connectionType === 'p2p'
             ? MOBILE_P2P_VIDEO_CODEC_ORDER
             : browser.isMobileDevice() ? MOBILE_VIDEO_CODEC_ORDER : DESKTOP_VIDEO_CODEC_ORDER;
-        if (connectionType === 'p2p' || this.options.jvb.supportsAv1) {
-            videoCodecMimeTypes.push(CodecMimeType.AV1);
-        }
         const supportedCodecs = videoCodecMimeTypes.filter(codec => {
             var _a, _b, _c, _d;
             return ((_d = (_c = (_b = (_a = window.RTCRtpReceiver) === null || _a === void 0 ? void 0 : _a.getCapabilities) === null || _b === void 0 ? void 0 : _b.call(_a, MediaType.VIDEO)) === null || _c === void 0 ? void 0 : _c.codecs) !== null && _d !== void 0 ? _d : [])

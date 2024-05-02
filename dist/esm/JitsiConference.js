@@ -319,7 +319,7 @@ JitsiConference.resourceCreator = function (jid, isAuthenticatedUser) {
  * @param options.connection {JitsiConnection} overrides this.connection
  */
 JitsiConference.prototype._init = function (options = {}) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     this.eventManager.setupXMPPListeners();
     const { config } = this.options;
     // Get the codec preference settings from config.js.
@@ -329,15 +329,14 @@ JitsiConference.prototype._init = function (options = {}) {
                 ? config.videoQuality.mobileCodecPreferenceOrder
                 : (_b = config.videoQuality) === null || _b === void 0 ? void 0 : _b.codecPreferenceOrder,
             disabledCodec: _getCodecMimeType((_c = config.videoQuality) === null || _c === void 0 ? void 0 : _c.disabledCodec),
-            preferredCodec: _getCodecMimeType((_d = config.videoQuality) === null || _d === void 0 ? void 0 : _d.preferredCodec),
-            supportsAv1: (_e = config.testing) === null || _e === void 0 ? void 0 : _e.enableAv1Support
+            preferredCodec: _getCodecMimeType((_d = config.videoQuality) === null || _d === void 0 ? void 0 : _d.preferredCodec)
         },
         p2p: {
-            preferenceOrder: browser.isMobileDevice() && ((_f = config.p2p) === null || _f === void 0 ? void 0 : _f.mobileCodecPreferenceOrder)
+            preferenceOrder: browser.isMobileDevice() && ((_e = config.p2p) === null || _e === void 0 ? void 0 : _e.mobileCodecPreferenceOrder)
                 ? config.p2p.mobileCodecPreferenceOrder
-                : (_g = config.p2p) === null || _g === void 0 ? void 0 : _g.codecPreferenceOrder,
-            disabledCodec: _getCodecMimeType((_h = config.p2p) === null || _h === void 0 ? void 0 : _h.disabledCodec),
-            preferredCodec: _getCodecMimeType((_j = config.p2p) === null || _j === void 0 ? void 0 : _j.preferredCodec)
+                : (_f = config.p2p) === null || _f === void 0 ? void 0 : _f.codecPreferenceOrder,
+            disabledCodec: _getCodecMimeType((_g = config.p2p) === null || _g === void 0 ? void 0 : _g.disabledCodec),
+            preferredCodec: _getCodecMimeType((_h = config.p2p) === null || _h === void 0 ? void 0 : _h.preferredCodec)
         }
     };
     this.codecSelection = new CodecSelection(this, codecSettings);
@@ -371,7 +370,7 @@ JitsiConference.prototype._init = function (options = {}) {
     this.room.addListener(XMPPEvents.SOURCE_ADD, this._updateRoomPresence);
     this.room.addListener(XMPPEvents.SOURCE_ADD_ERROR, this._removeLocalSourceOnReject);
     this.room.addListener(XMPPEvents.SOURCE_REMOVE, this._updateRoomPresence);
-    if ((_k = config.e2eping) === null || _k === void 0 ? void 0 : _k.enabled) {
+    if ((_j = config.e2eping) === null || _j === void 0 ? void 0 : _j.enabled) {
         this.e2eping = new E2ePing(this, config, (message, to) => {
             try {
                 this.sendMessage(message, to, true /* sendThroughVideobridge */);
@@ -393,7 +392,6 @@ JitsiConference.prototype._init = function (options = {}) {
             aliasName: this._statsCurrentId,
             userName: config.statisticsDisplayName ? config.statisticsDisplayName : this.myUserId(),
             confID: config.confID || `${this.connection.options.hosts.domain}/${this.options.name}`,
-            siteID: config.siteID,
             roomName: this.options.name,
             applicationName: config.applicationName
         });
@@ -1217,10 +1215,6 @@ JitsiConference.prototype._setupNewTrack = function (newTrack) {
     }
     this.rtc.addLocalTrack(newTrack);
     newTrack.setConference(this);
-    // Suspend media on the inactive media session since it gets automatically enabled for a newly added source.
-    if (this.isP2PActive()) {
-        this._suspendMediaTransferForJvbConnection();
-    }
     // Add event handlers.
     newTrack.muteHandler = this._fireMuteChangeEvent.bind(this, newTrack);
     newTrack.addEventListener(JitsiTrackEvents.TRACK_MUTE_CHANGED, newTrack.muteHandler);
@@ -1662,13 +1656,11 @@ JitsiConference.prototype.onMemberLeft = function (jid, reason) {
         }
     }
     tracksToBeRemoved.forEach(track => {
+        // Fire the event before renegotiation is done so that the thumbnails can be removed immediately.
+        this.eventEmitter.emit(JitsiConferenceEvents.TRACK_REMOVED, track);
         if (FeatureFlags.isSsrcRewritingSupported()) {
             track.setSourceName(null);
             track.setOwner(null);
-        }
-        else {
-            // Fire the event before renegotiation is done so that the thumbnails can be removed immediately.
-            this.eventEmitter.emit(JitsiConferenceEvents.TRACK_REMOVED, track);
         }
     });
     const participant = this.participants.get(id);
@@ -2541,9 +2533,7 @@ JitsiConference.prototype._addRemoteP2PTracks = function () {
  */
 JitsiConference.prototype._addRemoteTracks = function (logName, remoteTracks) {
     for (const track of remoteTracks) {
-        // There will be orphan (with no owner) tracks when ssrc-rewriting is enabled and all of them need to be addded
-        // back to the conference.
-        if (FeatureFlags.isSsrcRewritingSupported() || this.participants.has(track.ownerEndpointId)) {
+        if (this.participants.has(track.ownerEndpointId)) {
             logger.info(`Adding remote ${logName} track: ${track}`);
             this.onRemoteTrackAdded(track);
         }

@@ -3,7 +3,6 @@ import { getLogger } from '@jitsi/logger';
 import $ from 'jquery';
 import { $iq } from 'strophe.js';
 import { CONNECTION_REDIRECTED } from '../../JitsiConnectionEvents';
-import FeatureFlags from '../flags/FeatureFlags';
 import Settings from '../settings/Settings';
 import Listenable from '../util/Listenable';
 const AuthenticationEvents = require('../../service/authentication/AuthenticationEvents');
@@ -158,7 +157,7 @@ export default class Moderator extends Listenable {
         if (sessionId) {
             conferenceRequest.sessionId = sessionId;
         }
-        if (FeatureFlags.isJoinAsVisitorSupported() && !config.iAmRecorder && !config.iAmSipGateway) {
+        if (!config.iAmRecorder && !config.iAmSipGateway) {
             conferenceRequest.properties['visitors-version'] = 1;
             if (this.options.preferVisitor) {
                 conferenceRequest.properties.visitor = true;

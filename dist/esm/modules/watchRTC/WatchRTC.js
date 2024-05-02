@@ -1,5 +1,6 @@
 import Logger from '@jitsi/logger';
 import watchRTC from '@testrtc/watchrtc-sdk';
+import browser from '../browser';
 import { isAnalyticsEnabled, isWatchRTCEnabled } from './functions';
 const logger = Logger.getLogger(__filename);
 /**
@@ -17,6 +18,11 @@ class WatchRTCHandler {
     init(options) {
         var _a;
         if (isWatchRTCEnabled(options)) {
+            // @ts-ignore
+            if (browser.isReactNative()) {
+                logger.warn('Cannot initialize WatchRTC in a react native environment!');
+                return;
+            }
             if (!isAnalyticsEnabled(options)) {
                 logger.error('Cannot initialize WatchRTC when analytics or third party requests are disabled.');
                 return;
@@ -51,7 +57,6 @@ class WatchRTCHandler {
             if (this.options) {
                 this.options.rtcRoomId = this.options.rtcRoomId ? this.options.rtcRoomId : roomName;
                 this.options.rtcPeerId = this.options.rtcPeerId ? this.options.rtcPeerId : userName;
-                watchRTC.persistentEnd();
                 watchRTC.setConfig(this.options);
                 logger.info('WatchRTC setConfig.');
             }

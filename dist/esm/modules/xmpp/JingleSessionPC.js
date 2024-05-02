@@ -533,6 +533,7 @@ export default class JingleSessionPC extends JingleSession {
                 logger.info(`${this} onnegotiationneeded fired on ${this.peerconnection}`);
                 const workFunction = finishedCallback => {
                     this._renegotiate()
+                        .then(() => this.peerconnection.configureAudioSenderEncodings())
                         .then(() => finishedCallback(), error => finishedCallback(error));
                 };
                 this.modificationQueue.push(workFunction, error => {
@@ -776,12 +777,6 @@ export default class JingleSessionPC extends JingleSession {
         });
     }
     /**
-     * Returns the video codec configured as the preferred codec on the peerconnection.
-     */
-    getConfiguredVideoCodec() {
-        return this.peerconnection.getConfiguredVideoCodec();
-    }
-    /**
      * Accepts incoming Jingle 'session-initiate' and should send 'session-accept' in result.
      *
      * @param jingleOffer jQuery selector pointing to the jingle element of the offer IQ
@@ -987,7 +982,7 @@ export default class JingleSessionPC extends JingleSession {
             // Initiate a renegotiate for the codec setting to take effect.
             const workFunction = finishedCallback => {
                 this._renegotiate()
-                    .then(() => this.peerconnection.configureSenderVideoEncodings())
+                    .then(() => this.peerconnection.configureVideoSenderEncodings())
                     .then(() => {
                     logger.debug(`${this} setVideoCodecs task is done`);
                     return finishedCallback();
@@ -1459,25 +1454,24 @@ export default class JingleSessionPC extends JingleSession {
                     this._signalingLayer.removeSSRCOwners([oldSsrc]);
                     const track = this.peerconnection.getTrackBySSRC(oldSsrc);
                     if (track) {
-                        track.setSourceName(undefined);
-                        track.setOwner(undefined);
-                        track._setVideoType(undefined);
+                        this.room.eventEmitter.emit(JitsiTrackEvents.TRACK_OWNER_SET, track);
                     }
                 }
             }
             else {
-                logger.debug(`Existing SSRC re-mapped ${ssrc}: new owner=${owner}, source-name=${source}`);
                 const track = this.peerconnection.getTrackBySSRC(ssrc);
+                if (!track || (track.getParticipantId() === owner && track.getSourceName() === source)) {
+                    !track && logger.warn(`Remote track for SSRC=${ssrc} hasn't been created yet,`
+                        + 'not processing the source map');
+                    continue; // eslint-disable-line no-continue
+                }
+                logger.debug(`Existing SSRC re-mapped ${ssrc}: new owner=${owner}, source-name=${source}`);
                 this._signalingLayer.setSSRCOwner(ssrc, owner, source);
-                track.setSourceName(source);
-                track.setOwner(owner);
                 // Update the muted state and the video type on the track since the presence for this track could have
                 // been received before the updated source map is received on the bridge channel.
-                const peerMediaInfo = this._signalingLayer.getPeerMediaInfo(owner, mediaType, source);
-                if (peerMediaInfo) {
-                    track._setVideoType(peerMediaInfo.videoType);
-                    this.peerconnection._sourceMutedChanged(source, peerMediaInfo.muted);
-                }
+                const { muted, videoType } = this._signalingLayer.getPeerMediaInfo(owner, mediaType, source);
+                muted && this.peerconnection._sourceMutedChanged(source, muted);
+                this.room.eventEmitter.emit(JitsiTrackEvents.TRACK_OWNER_SET, track, owner, source, videoType);
             }
         }
         // Add the new SSRCs to the remote description by generating a source message.
@@ -1806,15 +1800,19 @@ export default class JingleSessionPC extends JingleSession {
      * @returns {Promise}
      */
     setMediaTransferActive(active) {
+        const changed = this.peerconnection.audioTransferActive !== active
+            || this.peerconnection.videoTransferActive !== active;
+        if (!changed) {
+            return Promise.resolve();
+        }
         return this.peerconnection.tpcUtils.setMediaTransferActive(active)
             .then(() => {
             this.peerconnection.audioTransferActive = active;
             this.peerconnection.videoTransferActive = active;
-            // Reconfigure the video tracks so that only the correct encodings are active.
+            // Reconfigure the audio and video tracks so that only the correct encodings are active.
             const promises = [];
-            for (const track of this.rtc.getLocalVideoTracks()) {
-                promises.push(this.peerconnection.configureSenderVideoEncodings(track));
-            }
+            promises.push(this.peerconnection.configureVideoSenderEncodings());
+            promises.push(this.peerconnection.configureAudioSenderEncodings());
             return Promise.allSettled(promises);
         });
     }
@@ -1940,7 +1938,7 @@ export default class JingleSessionPC extends JingleSession {
             // Configure the video encodings after the track is unmuted. If the user joins the call muted and
             // unmutes it the first time, all the parameters need to be configured.
             if (track.isVideoTrack()) {
-                return this.peerconnection.configureSenderVideoEncodings(track);
+                return this.peerconnection.configureVideoSenderEncodings(track);
             }
         });
     }

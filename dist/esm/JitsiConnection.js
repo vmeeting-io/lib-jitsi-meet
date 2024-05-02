@@ -1,5 +1,6 @@
 import JitsiConference from './JitsiConference';
 import * as JitsiConnectionEvents from './JitsiConnectionEvents';
+import FeatureFlags from './modules/flags/FeatureFlags';
 import Statistics from './modules/statistics/statistics';
 import XMPP from './modules/xmpp/xmpp';
 import { CONNECTION_DISCONNECTED as ANALYTICS_CONNECTION_DISCONNECTED, createConnectionFailedEvent } from './service/statistics/AnalyticsEvents';
@@ -17,6 +18,8 @@ export default function JitsiConnection(appID, token, options) {
     this.appID = appID;
     this.token = token;
     this.options = options;
+    // Initialize the feature flags so that they are advertised through the disco-info.
+    FeatureFlags.init(options.flags || {});
     this.xmpp = new XMPP(options, token);
     /* eslint-disable max-params */
     this.addEventListener(JitsiConnectionEvents.CONNECTION_FAILED, (errType, msg, credentials, details) => {

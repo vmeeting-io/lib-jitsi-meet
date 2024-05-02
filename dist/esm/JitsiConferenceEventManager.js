@@ -120,8 +120,15 @@ JitsiConferenceEventManager.prototype.setupChatRoomListeners = function () {
             conference.eventEmitter.emit(JitsiConferenceEvents.CONFERENCE_FAILED, JitsiConferenceErrors.OFFER_ANSWER_FAILED, e);
         }
     });
-    chatRoom.addListener(JitsiTrackEvents.TRACK_REMOVED, track => {
-        conference.eventEmitter.emit(JitsiConferenceEvents.TRACK_REMOVED, track);
+    chatRoom.addListener(JitsiTrackEvents.TRACK_OWNER_SET, (track, owner, sourceName, videoType) => {
+        if (track.getParticipantId() !== owner || track.getSourceName() !== sourceName) {
+            conference.eventEmitter.emit(JitsiConferenceEvents.TRACK_REMOVED, track);
+            // Update the owner and other properties on the track.
+            track.setOwner(owner);
+            track.setSourceName(sourceName);
+            track._setVideoType(videoType);
+            owner && conference.eventEmitter.emit(JitsiConferenceEvents.TRACK_ADDED, track);
+        }
     });
     this.chatRoomForwarder.forward(XMPPEvents.ROOM_JOIN_ERROR, JitsiConferenceEvents.CONFERENCE_FAILED, JitsiConferenceErrors.CONNECTION_ERROR);
     this.chatRoomForwarder.forward(XMPPEvents.DISPLAY_NAME_REQUIRED, JitsiConferenceEvents.CONFERENCE_FAILED, JitsiConferenceErrors.DISPLAY_NAME_REQUIRED);
@@ -309,14 +316,10 @@ JitsiConferenceEventManager.prototype.setupRTCListeners = function () {
         conference.eventEmitter.emit(JitsiConferenceEvents.DATA_CHANNEL_CLOSED, ev);
     });
     rtc.addListener(RTCEvents.VIDEO_SSRCS_REMAPPED, msg => {
-        for (const session of this.conference.getMediaSessions()) {
-            session.processSourceMap(msg, MediaType.VIDEO);
-        }
+        this.conference.jvbJingleSession.processSourceMap(msg, MediaType.VIDEO);
     });
     rtc.addListener(RTCEvents.AUDIO_SSRCS_REMAPPED, msg => {
-        for (const session of this.conference.getMediaSessions()) {
-            session.processSourceMap(msg, MediaType.AUDIO);
-        }
+        this.conference.jvbJingleSession.processSourceMap(msg, MediaType.AUDIO);
     });
     rtc.addListener(RTCEvents.ENDPOINT_MESSAGE_RECEIVED, (from, payload) => {
         const participant = conference.getParticipantById(from);

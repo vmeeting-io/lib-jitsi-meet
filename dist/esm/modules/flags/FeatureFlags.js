@@ -9,13 +9,10 @@ class FeatureFlags {
      * @param {object} flags - The feature flags.
      * @param {boolean=} flags.runInLiteMode - Enables lite mode for testing to disable media decoding.
      * @param {boolean=} flags.ssrcRewritingEnabled - Use SSRC rewriting.
-     * @param {boolean=} flags.enableJoinAsVisitor - Enable joining as a visitor.
      */
     init(flags) {
-        var _a;
         this._runInLiteMode = Boolean(flags.runInLiteMode);
         this._ssrcRewriting = Boolean(flags.ssrcRewritingEnabled);
-        this._joinAsVisitor = Boolean((_a = flags.enableJoinAsVisitor) !== null && _a !== void 0 ? _a : true);
     }
     /**
      * Checks if the run in lite mode is enabled.
@@ -33,13 +30,6 @@ class FeatureFlags {
      */
     isSsrcRewritingSupported() {
         return this._ssrcRewriting;
-    }
-    /**
-     * Checks if the clients supports joining as a visitor.
-     * @returns {boolean}
-     */
-    isJoinAsVisitorSupported() {
-        return this._joinAsVisitor;
     }
 }
 export default new FeatureFlags();

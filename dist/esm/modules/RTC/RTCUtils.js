@@ -115,7 +115,7 @@ function getConstraints(um = [], options = {}) {
             }
         }
         if (options.cameraDeviceId) {
-            constraints.video.deviceId = options.cameraDeviceId;
+            constraints.video.deviceId = { exact: options.cameraDeviceId };
         }
         else {
             const facingMode = options.facingMode || CameraFacingMode.USER;
@@ -131,10 +131,12 @@ function getConstraints(um = [], options = {}) {
         }
         constraints.audio = {
             autoGainControl: !disableAGC && !disableAP,
-            deviceId: options.micDeviceId,
             echoCancellation: !disableAEC && !disableAP,
             noiseSuppression: !disableNS && !disableAP
         };
+        if (options.micDeviceId) {
+            constraints.audio.deviceId = { exact: options.micDeviceId };
+        }
         if (stereo) {
             Object.assign(constraints.audio, { channelCount: 2 });
         }

@@ -41,10 +41,8 @@ Statistics.init = function (options) {
         Statistics.longTasksStatsInterval = options.longTasksStatsInterval;
     }
     Statistics.disableThirdPartyRequests = options.disableThirdPartyRequests;
-    // WatchRTC is not required to work for react native
-    browser.isReactNative()
-        ? logger.warn('Cannot initialize WatchRTC in a react native environment!')
-        : WatchRTC.init(options);
+    LocalStats.init();
+    WatchRTC.init(options);
     RTCStats.init(options);
 };
 /**

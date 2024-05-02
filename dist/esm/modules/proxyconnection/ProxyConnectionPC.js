@@ -142,9 +142,11 @@ export default class ProxyConnectionPC {
                 terminate: () => { }
             },
             sendIQ: this._onSendMessage,
-            // Returns empty function, because it does not add any listeners for real
+            // Returns empty function, because it does not add any listeners for real.
             // eslint-disable-next-line no-empty-function
-            addEventListener: () => () => { }
+            addEventListener: () => () => { },
+            // eslint-disable-next-line no-empty-function
+            addCancellableListener: () => () => { }
         };
         /**
          * {@code JingleSessionPC} can take in a custom ice configuration,

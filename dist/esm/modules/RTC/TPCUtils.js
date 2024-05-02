@@ -366,16 +366,19 @@ export class TPCUtils {
             .map(encoding => height / encoding.scaleResolutionDownBy)
             .map((frameHeight, idx) => {
             var _a;
+            let activeState = false;
+            // When video is suspended on the media session.
+            if (!this.pc.videoTransferActive) {
+                return activeState;
+            }
             // Single video stream.
             if (!this.pc.isSpatialScalabilityOn() || this._isRunningInFullSvcMode(codec)) {
                 const { active } = this._calculateActiveEncodingParams(localVideoTrack, codec, newHeight);
-                return idx === 0 ? active : false;
+                return idx === 0 ? active : activeState;
             }
-            // Multiple video streams.
-            let active = false;
             if (newHeight > 0) {
                 if (localVideoTrack.getVideoType() === VideoType.CAMERA) {
-                    active = frameHeight <= newHeight
+                    activeState = frameHeight <= newHeight
                         // Keep the LD stream enabled even when the LD stream's resolution is higher than of the
                         // requested resolution. This can happen when camera is captured at high resolutions like 4k
                         // but the requested resolution is 180. Since getParameters doesn't give us information about
@@ -386,11 +389,11 @@ export class TPCUtils {
                 else {
                     // For screenshare, keep the HD layer enabled always and the lower layers only for high fps
                     // screensharing.
-                    active = videoStreamEncodings[idx].scaleResolutionDownBy === SIM_LAYERS[2].scaleFactor
+                    activeState = videoStreamEncodings[idx].scaleResolutionDownBy === SIM_LAYERS[2].scaleFactor
                         || !this._isScreenshareBitrateCapped(localVideoTrack);
                 }
             }
-            return active;
+            return activeState;
         });
         return encodingsState;
     }
@@ -502,55 +505,6 @@ export class TPCUtils {
             type: description.type,
             sdp: transform.write(parsedSdp)
         });
-    }
-    /**
-     * Returns the max resolution that the client is configured to encode for a given local video track. The actual
-     * send resolution might be downscaled based on cpu and bandwidth constraints.
-     *
-     * @param {JitsiLocalTrack} localVideoTrack - The local video track.
-     * @param {CodecMimeType} codec - The codec currently in use.
-     * @returns {number|null} The max encoded resolution for the given video track.
-     */
-    getConfiguredEncodeResolution(localVideoTrack, codec) {
-        var _a;
-        const height = localVideoTrack.getCaptureResolution();
-        const videoSender = this.pc.findSenderForTrack(localVideoTrack.getTrack());
-        let maxHeight = 0;
-        if (!videoSender) {
-            return null;
-        }
-        const parameters = videoSender.getParameters();
-        if (!((_a = parameters === null || parameters === void 0 ? void 0 : parameters.encodings) === null || _a === void 0 ? void 0 : _a.length)) {
-            return null;
-        }
-        // SVC mode for VP9 and AV1 codecs.
-        if (this._isRunningInFullSvcMode(codec)) {
-            const activeEncoding = parameters.encodings[0];
-            if (activeEncoding.active) {
-                return height / activeEncoding.scaleResolutionDownBy;
-            }
-            return null;
-        }
-        const hasIncorrectConfig = this.pc._capScreenshareBitrate
-            ? parameters.encodings.every(encoding => encoding.active)
-            : parameters.encodings.some(encoding => !encoding.active);
-        // Check if every encoding is active for screenshare track when low fps screenshare is configured or some
-        // of the encodings are disabled when high fps screenshare is configured. In both these cases, the track
-        // encodings need to be reconfigured. This is needed when p2p->jvb switch happens and new sender constraints
-        // are not received by the client.
-        if (localVideoTrack.getVideoType() === VideoType.DESKTOP && hasIncorrectConfig) {
-            return null;
-        }
-        for (const encoding in parameters.encodings) {
-            if (parameters.encodings[encoding].active) {
-                const encodingConfig = this._getVideoStreamEncodings(localVideoTrack, codec);
-                const scaleResolutionDownBy = this.pc.isSpatialScalabilityOn()
-                    ? encodingConfig[encoding].scaleResolutionDownBy
-                    : parameters.encodings[encoding].scaleResolutionDownBy;
-                maxHeight = Math.max(maxHeight, height / scaleResolutionDownBy);
-            }
-        }
-        return maxHeight;
     }
     /**
      * Takes in a *unified plan* offer and inserts the appropriate parameters for adding simulcast receive support.
