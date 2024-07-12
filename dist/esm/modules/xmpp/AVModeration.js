@@ -11,17 +11,10 @@ export default class AVModeration {
      *
      * @param {ChatRoom} room the main room.
      */
-    constructor(room) {
+    constructor(room, defaults) {
         this._xmpp = room.xmpp;
         this._mainRoom = room;
-        this._moderationEnabledByType = {
-            audio: false,
-            video: false,
-            chat: false,
-            poll: false,
-            name: false,
-            presenter: false,
-        };
+        this._moderationEnabledByType = Object.assign({ audio: false, video: false, chat: false, poll: false, name: false, presenter: false }, (defaults || {}));
         this._whitelist = {
             audio: [],
             video: [],

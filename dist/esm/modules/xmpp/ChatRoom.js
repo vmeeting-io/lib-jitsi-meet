@@ -132,6 +132,7 @@ export default class ChatRoom extends Listenable {
      * for node presence.
      */
     constructor(connection, jid, password, xmpp, options) {
+        var _a;
         super();
         this.xmpp = xmpp;
         this.connection = connection;
@@ -158,7 +159,7 @@ export default class ChatRoom extends Listenable {
         if (typeof this.options.enableLobby === 'undefined' || this.options.enableLobby) {
             this.lobby = new Lobby(this);
         }
-        this.avModeration = new AVModeration(this);
+        this.avModeration = new AVModeration(this, (_a = options.roomInfo) === null || _a === void 0 ? void 0 : _a.moderations);
         this.breakoutRooms = new BreakoutRooms(this);
         this.roomMetadata = new RoomMetadata(this);
         this.initPresenceMap(options);
