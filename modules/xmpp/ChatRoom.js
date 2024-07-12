@@ -186,7 +186,7 @@ export default class ChatRoom extends Listenable {
         if (typeof this.options.enableLobby === 'undefined' || this.options.enableLobby) {
             this.lobby = new Lobby(this);
         }
-        this.avModeration = new AVModeration(this);
+        this.avModeration = new AVModeration(this, options.roomInfo?.moderations);
         this.breakoutRooms = new BreakoutRooms(this);
         this.roomMetadata = new RoomMetadata(this);
         this.initPresenceMap(options);

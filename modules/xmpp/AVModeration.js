@@ -15,7 +15,7 @@ export default class AVModeration {
      *
      * @param {ChatRoom} room the main room.
      */
-    constructor(room) {
+    constructor(room, defaults) {
         this._xmpp = room.xmpp;
 
         this._mainRoom = room;
@@ -27,6 +27,7 @@ export default class AVModeration {
             poll: false,
             name: false,
             presenter: false,
+            ...(defaults || {})
         };
 
         this._whitelist = {
