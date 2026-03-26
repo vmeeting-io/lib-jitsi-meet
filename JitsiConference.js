@@ -2338,6 +2338,18 @@ JitsiConference.prototype._acceptJvbIncomingCall = function(jingleSession, jingl
     }
 };
 
+function replaceWsHost(url) {
+    const currentHost = window.location.host; // 현재 도메인 + 포트
+    const currentProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  
+    const parsed = new URL(url);
+  
+    parsed.protocol = currentProtocol;
+    parsed.host = currentHost;
+  
+    return parsed.toString();
+}
+
 /**
  * Sets the BridgeChannel.
  *
@@ -2381,6 +2393,8 @@ JitsiConference.prototype._setBridgeChannel = function(offerIq, pc) {
     }
 
     if (wsUrl && !(sctpOffered && preferSctp)) {
+        // 여기서 강제로 전달된 도메인을 현재 도메인으로 교체해 보자
+        wsUrl = replaceWsHost(wsUrl);
         // If the offer contains a websocket and we don't prefer SCTP use it.
         this.rtc.initializeBridgeChannel(null, wsUrl);
     } else if (sctpOffered) {
