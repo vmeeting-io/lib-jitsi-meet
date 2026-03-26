@@ -1,8 +1,7 @@
 /******/ (() => { // webpackBootstrap
 /******/ 	"use strict";
-var __webpack_exports__ = {};
 
-;// CONCATENATED MODULE: ./modules/e2ee/crypto-utils.js
+;// ./modules/e2ee/crypto-utils.js
 /**
  * Derives a set of keys from the master key.
  * @param {CryptoKey} material - master key to derive from
@@ -61,7 +60,7 @@ async function importKey(keyBytes) {
     return crypto.subtle.importKey('raw', keyBytes, 'HKDF', false, [ 'deriveBits', 'deriveKey' ]);
 }
 
-;// CONCATENATED MODULE: ./modules/e2ee/Context.js
+;// ./modules/e2ee/Context.js
 /* eslint-disable no-bitwise */
 /* global BigInt */
 
@@ -392,7 +391,7 @@ class Context {
     }
 }
 
-;// CONCATENATED MODULE: ./modules/e2ee/Worker.js
+;// ./modules/e2ee/Worker.js
 /* global TransformStream */
 /* eslint-disable no-bitwise */
 
